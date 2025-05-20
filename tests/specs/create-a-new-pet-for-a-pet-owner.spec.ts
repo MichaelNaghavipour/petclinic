@@ -1,5 +1,5 @@
 import { test } from '@playwright/test';
-import { OwnersPage } from './pages/ownersPage';
+import { OwnersPage } from '../pages/ownersPage';
 
 test.describe('Pet Creation Feature', () => {
     let ownersPage: OwnersPage;

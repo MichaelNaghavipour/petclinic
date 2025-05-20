@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { OwnersPage } from './pages/ownersPage';
+import { OwnersPage } from '../pages/ownersPage';
 
 test.describe('Owner Creation Feature', () => {
     let ownersPage: OwnersPage;

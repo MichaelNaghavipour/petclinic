@@ -2,17 +2,24 @@ import { Page, expect } from '@playwright/test';
 import { BasePage } from './basePage';
 import { findSourceMap } from 'module';
 import { url } from 'inspector';
+import { FIND_OWNERS_URL } from '../constants/urls';
 
+/**
+ * Page object for managing pet clinic owners, their pets, and visits
+ */
 export class OwnersPage extends BasePage {
     constructor(page: Page) {
         super(page);
     }
 
+    /**
+     * Searches for an owner by last name, navigating to find owners page if needed
+     */
     async findOwner(lastName: string): Promise<void> {
         // Check current URL and navigate if needed
         const currentUrl = this.page.url();
-        if (!currentUrl.endsWith('/owners/find')) {
-            await this.page.goto('/owners/find');
+        if (!currentUrl.endsWith(FIND_OWNERS_URL)) {
+            await this.page.goto(FIND_OWNERS_URL);
         }
 
         const lastNameInput = this.page.locator('#lastName');
@@ -21,13 +28,16 @@ export class OwnersPage extends BasePage {
         await findOwnerButton.click();
     }
 
+    /**
+     * Creates a new owner with provided details
+     */
     async addNewOwner(ownerData: {
         firstName: string;
         lastName: string;
         address: string;
         city: string;
         telephone: string;
-    }) {
+    }): Promise<void> {
         const addOwnerButton = this.page.getByRole('link', { name: 'Add Owner' });
         await addOwnerButton.click();
         await this.page.fill('#firstName', ownerData.firstName);
@@ -38,22 +48,31 @@ export class OwnersPage extends BasePage {
         await this.page.click('button[type="submit"]');
     }
 
+    /**
+     * Verifies owner exists and returns the number of matches found
+     */
     async verifyOwnerExists(lastName: string): Promise<number> {
         const ownerData = this.page.locator('td', { hasText: lastName });
         await expect(ownerData.first()).toBeVisible();
         return ownerData.count();
     }
 
-    async verifyNoOwnersFound() {
+    /**
+     * Verifies "owner not found" message is displayed
+     */
+    async verifyNoOwnersFound(): Promise<void> {
         const noResultsMessage = this.page.locator('text=has not been found');
         await expect(noResultsMessage).toBeVisible();
     }
 
+    /**
+     * Adds a new pet to an existing owner's record
+     */
     async addNewPet(ownerLastName: string, petData: {
         name: string;
         birthDate: string;
         type: string;
-    }) {
+    }): Promise<void> {
         await this.findOwner(ownerLastName);
         await this.page.click('a[href$="/pets/new"]');
         await this.page.fill('#name', petData.name);
@@ -62,47 +81,40 @@ export class OwnersPage extends BasePage {
         await this.page.click('button[type="submit"]');
     }
 
+    /**
+     * Schedules a new visit for a specific pet
+     */
     async addNewVisit(ownerLastName: string, petName: string, visitData: {
         date: string;
         description: string;
-    }) {
+    }): Promise<void> {
         await this.findOwner(ownerLastName);
-        
-        // Find the specific pet's row and its Add Visit link
         const petRow = this.page.locator('tr', {
             has: this.page.locator('dl.dl-horizontal dd', { hasText: petName })
         });
         const addVisitLink = petRow.locator('a:has-text("Add Visit")');
         await addVisitLink.click();
-        
-        // Fill in the visit form
         await this.page.fill('#date', visitData.date);
         await this.page.fill('#description', visitData.description);
         await this.page.click('button[type="submit"]');
     }
 
     /**
-     * Verifies validation error message for a specific field
-     * @param fieldId - The ID of the field to check
-     * @param expectedError - Expected error message
+     * Validates form field errors and their corresponding messages
      */
     async verifyValidationError(fieldId: string, expectedError: string): Promise<void> {
-        // Use a specific selector that matches the exact HTML structure
         const formGroup = this.page.locator(`div.form-group.has-error:has(label[for="${fieldId}"])`);
         
-        // Wait for and verify the form group exists
         await formGroup.waitFor({ state: 'visible' });
         
-        // Verify the error icon is visible
         await expect(formGroup.locator('span.fa-remove.form-control-feedback')).toBeVisible();
         
-        // Verify the error message
         const errorMessage = formGroup.locator('span.help-inline');
         await expect(errorMessage).toContainText(expectedError);
     }
 
     /**
-     * Verifies that all required fields show appropriate validation messages
+     * Validates all required owner information fields
      */
     async verifyAllFieldsRequired(): Promise<void> {
         await this.verifyValidationError('firstName', 'must not be blank');
@@ -113,38 +125,46 @@ export class OwnersPage extends BasePage {
         await this.verifyValidationError('telephone', 'Telephone must be a 10-digit number');
     }
 
-    async verifyPetExists(ownerLastName: string, petName: string) {
+    /**
+     * Verifies a pet exists in the owner's record
+     */
+    async verifyPetExists(ownerLastName: string, petName: string): Promise<void> {
         await this.findOwner(ownerLastName);
         const petElement = this.page.locator('td', { hasText: petName });
         await expect(petElement).toBeVisible();
     }
 
-    async verifyVisitExists(ownerLastName: string, petName: string, description: string) {
+    /**
+     * Verifies a visit exists in the pet's record
+     */
+    async verifyVisitExists(ownerLastName: string, petName: string, description: string): Promise<void> {
         await this.findOwner(ownerLastName);
         
-        // Find the specific pet's row
         const petRow = this.page.locator('tr', {
             has: this.page.locator('dl.dl-horizontal dd', { hasText: petName })
         });
         
-        // Get the visits table within this row and wait for it
         const visitsTable = petRow.locator('table.table-condensed');
         await visitsTable.waitFor({ state: 'visible' });
         
-        // Look for the specific visit within the pet's visits table
         const visitRow = visitsTable.getByRole('row', {
             name: new RegExp(`.*${description}.*`)
         });
         
-        // Verify the visit exists
         await expect(visitRow).toBeVisible();
     }
 
+    /**
+     * Returns the total number of owners in the list
+     */
     async getOwnersCount(): Promise<number> {
         const ownerRows = this.page.locator('table#owners tbody tr');
         return await ownerRows.count();
     }
 
+    /**
+     * Validates owner information matches the provided data
+     */
     async verifyOwnerInformation(newOwner: {
         firstName: string,
         lastName: string,

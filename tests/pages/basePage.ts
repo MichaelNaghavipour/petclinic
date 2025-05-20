@@ -14,8 +14,4 @@ export class BasePage {
     async navigateToFindOwners() {
         await this.page.getByRole('link', { name: 'Find Owners' }).click()
     }
-
-    async navigateToVets() {
-        await this.page.getByRole('link', { name: 'Veterinarians' }).click()
-    }
 }
