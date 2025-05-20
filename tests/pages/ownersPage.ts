@@ -1,13 +1,20 @@
 import { Page, expect } from '@playwright/test';
 import { BasePage } from './basePage';
 import { findSourceMap } from 'module';
+import { url } from 'inspector';
 
 export class OwnersPage extends BasePage {
     constructor(page: Page) {
         super(page);
     }
 
-    async findOwner(lastName: string) {
+    async findOwner(lastName: string): Promise<void> {
+        // Check current URL and navigate if needed
+        const currentUrl = this.page.url();
+        if (!currentUrl.endsWith('/owners/find')) {
+            await this.page.goto('/owners/find');
+        }
+
         const lastNameInput = this.page.locator('#lastName');
         await lastNameInput.fill(lastName);
         const findOwnerButton = this.page.getByRole('button', { name: 'Find Owner' });
@@ -60,57 +67,50 @@ export class OwnersPage extends BasePage {
         description: string;
     }) {
         await this.findOwner(ownerLastName);
-        await this.page.click(`a:has-text("Add Visit")`);
+        
+        // Find the specific pet's row and its Add Visit link
+        const petRow = this.page.locator('tr', {
+            has: this.page.locator('dl.dl-horizontal dd', { hasText: petName })
+        });
+        const addVisitLink = petRow.locator('a:has-text("Add Visit")');
+        await addVisitLink.click();
+        
+        // Fill in the visit form
         await this.page.fill('#date', visitData.date);
         await this.page.fill('#description', visitData.description);
         await this.page.click('button[type="submit"]');
     }
 
     /**
-     * Verifies validation error messages for a specific field
+     * Verifies validation error message for a specific field
      * @param fieldId - The ID of the field to check
-     * @param expectedError - Expected error message or array of messages
+     * @param expectedError - Expected error message
      */
-    async verifyValidationError(fieldId: string, expectedError: string | string[]) {
-        // Use a more specific selector that matches the exact HTML structure
+    async verifyValidationError(fieldId: string, expectedError: string): Promise<void> {
+        // Use a specific selector that matches the exact HTML structure
         const formGroup = this.page.locator(`div.form-group.has-error:has(label[for="${fieldId}"])`);
         
         // Wait for and verify the form group exists
         await formGroup.waitFor({ state: 'visible' });
         
-        // Verify the error icon is visible within this specific form group
+        // Verify the error icon is visible
         await expect(formGroup.locator('span.fa-remove.form-control-feedback')).toBeVisible();
         
-        // Get error messages within this specific form group
-        const errorMessages = formGroup.locator('span.help-inline');
-        await errorMessages.waitFor({ state: 'visible' });
-        
-        if (Array.isArray(expectedError)) {
-            // For multiple error messages, verify each one
-            for (const error of expectedError) {
-                await expect(errorMessages).toContainText(error);
-            }
-        } else {
-            // For single error message
-            await expect(errorMessages).toContainText(expectedError);
-        }
+        // Verify the error message
+        const errorMessage = formGroup.locator('span.help-inline');
+        await expect(errorMessage).toContainText(expectedError);
     }
 
     /**
      * Verifies that all required fields show appropriate validation messages
      */
-    async verifyAllFieldsRequired() {
-        const requiredFields = [
-            { id: 'firstName', error: 'must not be blank' },
-            { id: 'lastName', error: 'must not be blank' },
-            { id: 'address', error: 'must not be blank' },
-            { id: 'city', error: 'must not be blank' },
-            { id: 'telephone', error: ['must not be blank', 'Telephone must be a 10-digit number'] }
-        ];
-
-        for (const field of requiredFields) {
-            await this.verifyValidationError(field.id, field.error);
-        }
+    async verifyAllFieldsRequired(): Promise<void> {
+        await this.verifyValidationError('firstName', 'must not be blank');
+        await this.verifyValidationError('lastName', 'must not be blank');
+        await this.verifyValidationError('address', 'must not be blank');
+        await this.verifyValidationError('city', 'must not be blank');
+        await this.verifyValidationError('telephone', 'must not be blank');
+        await this.verifyValidationError('telephone', 'Telephone must be a 10-digit number');
     }
 
     async verifyPetExists(ownerLastName: string, petName: string) {
@@ -121,8 +121,23 @@ export class OwnersPage extends BasePage {
 
     async verifyVisitExists(ownerLastName: string, petName: string, description: string) {
         await this.findOwner(ownerLastName);
-        const visitElement = this.page.locator('tr', { has: this.page.locator('td', { hasText: description }) });
-        await expect(visitElement).toBeVisible();
+        
+        // Find the specific pet's row
+        const petRow = this.page.locator('tr', {
+            has: this.page.locator('dl.dl-horizontal dd', { hasText: petName })
+        });
+        
+        // Get the visits table within this row and wait for it
+        const visitsTable = petRow.locator('table.table-condensed');
+        await visitsTable.waitFor({ state: 'visible' });
+        
+        // Look for the specific visit within the pet's visits table
+        const visitRow = visitsTable.getByRole('row', {
+            name: new RegExp(`.*${description}.*`)
+        });
+        
+        // Verify the visit exists
+        await expect(visitRow).toBeVisible();
     }
 
     async getOwnersCount(): Promise<number> {
